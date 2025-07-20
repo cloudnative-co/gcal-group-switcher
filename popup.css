@@ -1,6 +1,6 @@
 body {
-  width: 420px;
-  min-height: 500px;
+  width: 400px;
+  min-height: 600px;
   margin: 0;
   padding: 0;
   font-family: 'Roboto', Arial, sans-serif;
@@ -10,13 +10,42 @@ body {
 
 .container {
   padding: 16px;
+  overflow-x: hidden;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
 }
 
 h2 {
-  margin: 0 0 16px 0;
+  margin: 0;
   font-size: 18px;
   color: #1a73e8;
   font-weight: 500;
+}
+
+.github-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #5f6368;
+  text-decoration: none;
+  font-size: 12px;
+  padding: 6px;
+  border-radius: 50%;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.github-link:hover {
+  background-color: #f8f9fa;
+  color: #3c4043;
+}
+
+.github-link svg {
+  display: block;
 }
 
 h3 {
@@ -61,50 +90,85 @@ h3 {
 }
 
 .group-list {
-  max-height: 250px;
+  max-height: 300px;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .group-item {
   display: flex;
   flex-direction: column;
-  padding: 8px 12px;
+  padding: 0;
   border-radius: 4px;
   margin-bottom: 4px;
   background-color: #f8f9fa;
   transition: background-color 0.2s, transform 0.2s;
+  overflow: hidden;
+  width: 100%;
 }
 
 .group-item:hover {
   background-color: #e8f0fe;
 }
 
-.group-item-moved {
-  animation: highlight 0.3s ease-out;
+.group-item.dragging {
+  opacity: 0.5;
+  transform: scale(0.95);
 }
 
-@keyframes highlight {
-  0% {
-    background-color: #c2e0ff;
-    transform: scale(1.02);
-  }
-  100% {
-    background-color: #e8f0fe;
-    transform: scale(1);
-  }
+.group-item.drag-over {
+  background-color: #c2e0ff;
+  transform: scale(1.02);
 }
 
 .group-content {
   display: flex;
-  justify-content: space-between;
   align-items: center;
   width: 100%;
-  gap: 12px;
+  gap: 8px;
+  padding: 8px 12px;
+  justify-content: space-between;
+  box-sizing: border-box;
+}
+
+.drag-handle {
+  cursor: grab;
+  color: #9aa0a6;
+  padding: 4px 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.drag-handle:hover {
+  color: #5f6368;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
 }
 
 .group-info {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
+  cursor: pointer;
+  user-select: none;
+  overflow: hidden;
+}
+
+.group-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.expand-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: transform 0.2s;
 }
 
 .group-name {
@@ -115,53 +179,39 @@ h3 {
   white-space: nowrap;
 }
 
-.group-members {
+.group-count {
   font-size: 12px;
   color: #5f6368;
-  margin-top: 4px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  flex-shrink: 0;
+  margin-left: 4px;
 }
 
 .group-actions {
   display: flex;
-  gap: 4px;
+  gap: 3px;
   align-items: center;
+  flex: 0 0 auto;
   flex-shrink: 0;
 }
 
-.group-order-buttons {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-right: 8px;
-  width: 24px;
+.group-members-list {
+  padding: 8px 12px 12px 48px;
+  background-color: rgba(0, 0, 0, 0.02);
+  border-top: 1px solid #e0e0e0;
 }
 
-.btn-icon {
-  padding: 2px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  border-radius: 4px;
-  color: #5f6368;
-  transition: background-color 0.2s, color 0.2s;
+.member-item {
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-}
-
-.btn-icon:hover {
-  background-color: #e8eaed;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 13px;
   color: #3c4043;
 }
 
-.btn-icon-placeholder {
-  width: 20px;
-  height: 20px;
+.member-item svg {
+  color: #5f6368;
+  flex-shrink: 0;
 }
 
 .button-group {
@@ -187,6 +237,7 @@ h3 {
   padding: 4px 8px;
   font-size: 12px;
   min-width: 40px;
+  white-space: nowrap;
 }
 
 .btn-primary {
@@ -316,30 +367,6 @@ h3 {
   overflow-y: auto;
   white-space: pre-wrap;
   font-family: monospace;
-}
-
-.footer {
-  margin-top: 16px;
-  padding-top: 12px;
-  border-top: 1px solid #e0e0e0;
-  text-align: center;
-}
-
-.github-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: #5f6368;
-  text-decoration: none;
-  font-size: 12px;
-  padding: 4px 8px;
-  border-radius: 4px;
-  transition: background-color 0.2s, color 0.2s;
-}
-
-.github-link:hover {
-  background-color: #f8f9fa;
-  color: #3c4043;
 }
 
 ::-webkit-scrollbar {

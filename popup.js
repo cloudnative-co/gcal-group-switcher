@@ -3,6 +3,7 @@ let groups = [];
 let allCalendars = [];
 let lastDebugInfo = '';
 let editingGroupIndex = null;
+let expandedGroups = new Set();
 
 // 初期化
 document.addEventListener('DOMContentLoaded', async () => {
@@ -81,35 +82,65 @@ function renderGroupList() {
     return;
   }
   
-  groupListElement.innerHTML = groups.map((group, index) => `
-    <div class="group-item" data-index="${index}">
+  groupListElement.innerHTML = groups.map((group, index) => {
+    const isExpanded = expandedGroups.has(index);
+    return `
+    <div class="group-item ${isExpanded ? 'expanded' : ''}" data-index="${index}" draggable="true">
       <div class="group-content">
-        <div class="group-info">
-          <div class="group-name">${escapeHtml(group.name)}</div>
-          <div class="group-members">${group.members.length}人: ${escapeHtml(group.members.slice(0, 3).join(', '))}${group.members.length > 3 ? '...' : ''}</div>
+        <div class="drag-handle" title="ドラッグして並び替え">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <circle cx="9" cy="5" r="1.5"/>
+            <circle cx="15" cy="5" r="1.5"/>
+            <circle cx="9" cy="12" r="1.5"/>
+            <circle cx="15" cy="12" r="1.5"/>
+            <circle cx="9" cy="19" r="1.5"/>
+            <circle cx="15" cy="19" r="1.5"/>
+          </svg>
+        </div>
+        <div class="group-info" data-index="${index}">
+          <div class="group-header">
+            <div class="expand-icon">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="${isExpanded ? '6 9 12 15 18 9' : '9 6 15 12 9 18'}"></polyline>
+              </svg>
+            </div>
+            <div class="group-name">${escapeHtml(group.name)}</div>
+            <div class="group-count">(${group.members.length}人)</div>
+          </div>
         </div>
         <div class="group-actions">
-          <div class="group-order-buttons">
-            ${index > 0 ? `<button class="btn-icon move-up-btn" data-index="${index}" title="上へ移動">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="18 15 12 9 6 15"></polyline>
-              </svg>
-            </button>` : '<div class="btn-icon-placeholder"></div>'}
-            ${index < groups.length - 1 ? `<button class="btn-icon move-down-btn" data-index="${index}" title="下へ移動">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="6 9 12 15 18 9"></polyline>
-              </svg>
-            </button>` : '<div class="btn-icon-placeholder"></div>'}
-          </div>
           <button class="btn btn-primary btn-small apply-btn" data-index="${index}">適用</button>
           <button class="btn btn-secondary btn-small edit-btn" data-index="${index}">編集</button>
           <button class="btn btn-danger btn-small delete-btn" data-index="${index}">削除</button>
         </div>
       </div>
+      ${isExpanded ? `
+        <div class="group-members-list">
+          ${group.members.map(member => `
+            <div class="member-item">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+              </svg>
+              ${escapeHtml(member)}
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
     </div>
-  `).join('');
+  `}).join('');
   
   // イベントリスナーを設定
+  document.querySelectorAll('.group-info').forEach(info => {
+    info.addEventListener('click', (e) => {
+      // ボタンのクリックは除外
+      if (!e.target.closest('.group-actions')) {
+        const index = parseInt(info.dataset.index);
+        toggleGroupExpansion(index);
+      }
+    });
+  });
+  
   document.querySelectorAll('.apply-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const index = parseInt(e.target.dataset.index);
@@ -131,19 +162,8 @@ function renderGroupList() {
     });
   });
   
-  document.querySelectorAll('.move-up-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const index = parseInt(e.currentTarget.dataset.index);
-      moveGroup(index, index - 1);
-    });
-  });
-  
-  document.querySelectorAll('.move-down-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const index = parseInt(e.currentTarget.dataset.index);
-      moveGroup(index, index + 1);
-    });
-  });
+  // ドラッグ＆ドロップのイベントリスナー
+  setupDragAndDrop();
 }
 
 // 編集をキャンセル
@@ -376,26 +396,85 @@ async function showMyCalendarOnly() {
   }
 }
 
-// グループの順番を入れ替える
-async function moveGroup(fromIndex, toIndex) {
-  // 配列の要素を入れ替え
-  const [movedGroup] = groups.splice(fromIndex, 1);
-  groups.splice(toIndex, 0, movedGroup);
+// ドラッグ＆ドロップの設定
+let draggedElement = null;
+let draggedIndex = null;
+
+function setupDragAndDrop() {
+  const items = document.querySelectorAll('.group-item');
   
-  // 保存
-  await chrome.storage.local.set({ calendarGroups: groups });
-  
-  // 再描画
-  renderGroupList();
-  
-  // アニメーション効果のためにハイライト
-  const movedItem = document.querySelector(`.group-item[data-index="${toIndex}"]`);
-  if (movedItem) {
-    movedItem.classList.add('group-item-moved');
-    setTimeout(() => {
-      movedItem.classList.remove('group-item-moved');
-    }, 300);
+  items.forEach(item => {
+    item.addEventListener('dragstart', handleDragStart);
+    item.addEventListener('dragenter', handleDragEnter);
+    item.addEventListener('dragover', handleDragOver);
+    item.addEventListener('dragleave', handleDragLeave);
+    item.addEventListener('drop', handleDrop);
+    item.addEventListener('dragend', handleDragEnd);
+  });
+}
+
+function handleDragStart(e) {
+  draggedElement = this;
+  draggedIndex = parseInt(this.dataset.index);
+  this.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/html', this.innerHTML);
+}
+
+function handleDragEnter(e) {
+  if (this !== draggedElement) {
+    this.classList.add('drag-over');
   }
+}
+
+function handleDragOver(e) {
+  if (e.preventDefault) {
+    e.preventDefault();
+  }
+  e.dataTransfer.dropEffect = 'move';
+  return false;
+}
+
+function handleDragLeave(e) {
+  this.classList.remove('drag-over');
+}
+
+function handleDrop(e) {
+  if (e.stopPropagation) {
+    e.stopPropagation();
+  }
+  
+  const dropIndex = parseInt(this.dataset.index);
+  
+  if (draggedElement !== this) {
+    // 配列内で要素を移動
+    const [movedGroup] = groups.splice(draggedIndex, 1);
+    groups.splice(dropIndex, 0, movedGroup);
+    
+    // 保存して再描画
+    chrome.storage.local.set({ calendarGroups: groups }).then(() => {
+      renderGroupList();
+    });
+  }
+  
+  return false;
+}
+
+function handleDragEnd(e) {
+  const items = document.querySelectorAll('.group-item');
+  items.forEach(item => {
+    item.classList.remove('drag-over', 'dragging');
+  });
+}
+
+// グループの展開/折りたたみ
+function toggleGroupExpansion(index) {
+  if (expandedGroups.has(index)) {
+    expandedGroups.delete(index);
+  } else {
+    expandedGroups.add(index);
+  }
+  renderGroupList();
 }
 
 // HTMLエスケープ
