@@ -25,6 +25,32 @@ h3 {
   font-weight: 500;
 }
 
+.quick-actions {
+  margin-bottom: 12px;
+}
+
+.quick-action-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  font-size: 14px;
+  background-color: #e8f0fe;
+  color: #1967d2;
+  border: 1px solid #dadce0;
+}
+
+.quick-action-btn:hover {
+  background-color: #d2e3fc;
+  border-color: #1967d2;
+}
+
+.quick-action-btn svg {
+  flex-shrink: 0;
+}
+
 .group-section, .create-section {
   background: white;
   border-radius: 8px;

@@ -23,6 +23,7 @@ function setupEventListeners() {
   document.getElementById('memberInput').addEventListener('keydown', handleKeyDown);
   document.getElementById('showDebugInfo').addEventListener('click', showDebugInfo);
   document.getElementById('copyDebugInfo').addEventListener('click', copyDebugInfo);
+  document.getElementById('showMyCalendarOnly').addEventListener('click', showMyCalendarOnly);
   
   // クリックでオートコンプリートを閉じる
   document.addEventListener('click', (e) => {
@@ -264,6 +265,32 @@ function showMessage(text, type) {
   setTimeout(() => {
     messageElement.className = 'message';
   }, 3000);
+}
+
+// 自分のカレンダーのみを表示
+async function showMyCalendarOnly() {
+  const tabs = await chrome.tabs.query({active: true, currentWindow: true});
+  if (tabs[0].url.includes('calendar.google.com')) {
+    try {
+      const response = await chrome.tabs.sendMessage(tabs[0].id, {
+        action: 'showMyCalendarOnly'
+      });
+      
+      if (response && response.success) {
+        showMessage('自分のカレンダーのみを表示しました', 'success');
+        
+        // ポップアップを自動で閉じる
+        setTimeout(() => {
+          window.close();
+        }, 1000);
+      } else {
+        showMessage('操作に失敗しました', 'error');
+      }
+    } catch (error) {
+      console.error('エラー:', error);
+      showMessage('操作に失敗しました', 'error');
+    }
+  }
 }
 
 // HTMLエスケープ
