@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Calendar Group Manager Debug</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    h1 {
+      color: #1a73e8;
+    }
+    .section {
+      background: #f5f5f5;
+      padding: 15px;
+      margin: 10px 0;
+      border-radius: 5px;
+    }
+    pre {
+      background: #fff;
+      padding: 10px;
+      border: 1px solid #ddd;
+      overflow-x: auto;
+      white-space: pre-wrap;
+    }
+    button {
+      background: #1a73e8;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin: 5px;
+    }
+    button:hover {
+      background: #1557b0;
+    }
+    #status {
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 4px;
+    }
+    .success {
+      background: #e6f4ea;
+      color: #1e8e3e;
+    }
+    .error {
+      background: #fce8e6;
+      color: #d93025;
+    }
+  </style>
+</head>
+<body>
+  <h1>Calendar Group Manager デバッグツール</h1>
+  
+  <div class="section">
+    <h2>1. Googleカレンダーのページを開く</h2>
+    <p>まず、Googleカレンダーのタブを開いてください。</p>
+    <button onclick="openCalendar()">Googleカレンダーを開く</button>
+  </div>
+
+  <div class="section">
+    <h2>2. カレンダーリストを取得</h2>
+    <p>現在のカレンダーリストを取得して確認します。</p>
+    <button onclick="getCalendars()">カレンダーリストを取得</button>
+    <div id="calendarList"></div>
+  </div>
+
+  <div class="section">
+    <h2>3. DOM構造を確認</h2>
+    <p>チェックボックスの構造を確認します。</p>
+    <button onclick="inspectDOM()">DOM構造を確認</button>
+    <div id="domStructure"></div>
+  </div>
+
+  <div class="section">
+    <h2>4. テスト実行</h2>
+    <p>カレンダー名を入力してチェックのオン/オフをテストします。</p>
+    <input type="text" id="testCalendarName" placeholder="カレンダー名を入力" style="width: 300px; padding: 5px;">
+    <br>
+    <button onclick="testCheck()">チェックを入れる</button>
+    <button onclick="testUncheck()">チェックを外す</button>
+    <button onclick="testToggle()">トグル</button>
+  </div>
+
+  <div id="status"></div>
+
+  <script>
+    function showStatus(message, type = 'success') {
+      const status = document.getElementById('status');
+      status.className = type;
+      status.textContent = message;
+    }
+
+    function openCalendar() {
+      window.open('https://calendar.google.com', '_blank');
+    }
+
+    async function getCalendars() {
+      try {
+        const tabs = await chrome.tabs.query({url: '*://calendar.google.com/*'});
+        if (tabs.length === 0) {
+          showStatus('Googleカレンダーのタブが見つかりません', 'error');
+          return;
+        }
+
+        const response = await chrome.tabs.sendMessage(tabs[0].id, {action: 'getCalendars'});
+        const list = document.getElementById('calendarList');
+        
+        if (response && response.calendars) {
+          list.innerHTML = '<h3>見つかったカレンダー:</h3><pre>' + 
+            JSON.stringify(response.calendars, null, 2) + '</pre>';
+          showStatus(`${response.calendars.length}個のカレンダーが見つかりました`);
+        } else {
+          list.innerHTML = '<p>カレンダーが見つかりませんでした</p>';
+          showStatus('カレンダーが見つかりませんでした', 'error');
+        }
+      } catch (error) {
+        showStatus('エラー: ' + error.message, 'error');
+      }
+    }
+
+    async function inspectDOM() {
+      try {
+        const tabs = await chrome.tabs.query({url: '*://calendar.google.com/*'});
+        if (tabs.length === 0) {
+          showStatus('Googleカレンダーのタブが見つかりません', 'error');
+          return;
+        }
+
+        // DOM検査用のコードを実行
+        const results = await chrome.tabs.executeScript(tabs[0].id, {
+          code: `
+            const checkboxes = document.querySelectorAll('input[type="checkbox"][aria-label]');
+            const info = [];
+            checkboxes.forEach((cb, index) => {
+              if (index < 5) { // 最初の5個だけ
+                const parent = cb.closest('li') || cb.parentElement;
+                info.push({
+                  ariaLabel: cb.getAttribute('aria-label'),
+                  checked: cb.checked,
+                  parentHTML: parent ? parent.outerHTML.substring(0, 200) + '...' : 'No parent'
+                });
+              }
+            });
+            JSON.stringify(info, null, 2);
+          `
+        });
+
+        const structure = document.getElementById('domStructure');
+        structure.innerHTML = '<h3>チェックボックスの構造（最初の5個）:</h3><pre>' + results[0] + '</pre>';
+        showStatus('DOM構造を取得しました');
+      } catch (error) {
+        showStatus('エラー: ' + error.message, 'error');
+      }
+    }
+
+    async function testCheck() {
+      const name = document.getElementById('testCalendarName').value;
+      if (!name) {
+        showStatus('カレンダー名を入力してください', 'error');
+        return;
+      }
+
+      try {
+        const tabs = await chrome.tabs.query({url: '*://calendar.google.com/*'});
+        if (tabs.length === 0) {
+          showStatus('Googleカレンダーのタブが見つかりません', 'error');
+          return;
+        }
+
+        await chrome.tabs.sendMessage(tabs[0].id, {
+          action: 'applyGroup',
+          members: [name]
+        });
+        showStatus(`"${name}" にチェックを入れました`);
+      } catch (error) {
+        showStatus('エラー: ' + error.message, 'error');
+      }
+    }
+
+    async function testUncheck() {
+      try {
+        const tabs = await chrome.tabs.query({url: '*://calendar.google.com/*'});
+        if (tabs.length === 0) {
+          showStatus('Googleカレンダーのタブが見つかりません', 'error');
+          return;
+        }
+
+        await chrome.tabs.executeScript(tabs[0].id, {
+          code: `
+            const checkboxes = document.querySelectorAll('input[type="checkbox"][aria-label]:checked');
+            checkboxes.forEach(cb => cb.click());
+            'Unchecked all calendars';
+          `
+        });
+        showStatus('全てのチェックを外しました');
+      } catch (error) {
+        showStatus('エラー: ' + error.message, 'error');
+      }
+    }
+
+    async function testToggle() {
+      const name = document.getElementById('testCalendarName').value;
+      if (!name) {
+        showStatus('カレンダー名を入力してください', 'error');
+        return;
+      }
+
+      try {
+        const tabs = await chrome.tabs.query({url: '*://calendar.google.com/*'});
+        if (tabs.length === 0) {
+          showStatus('Googleカレンダーのタブが見つかりません', 'error');
+          return;
+        }
+
+        const result = await chrome.tabs.executeScript(tabs[0].id, {
+          code: `
+            let found = false;
+            const checkboxes = document.querySelectorAll('input[type="checkbox"][aria-label]');
+            checkboxes.forEach(cb => {
+              const label = cb.getAttribute('aria-label');
+              if (label && label.includes('${name}')) {
+                cb.click();
+                found = true;
+              }
+            });
+            found ? 'Toggled: ${name}' : 'Not found: ${name}';
+          `
+        });
+        showStatus(result[0]);
+      } catch (error) {
+        showStatus('エラー: ' + error.message, 'error');
+      }
+    }
+  </script>
+</body>
+</html>
