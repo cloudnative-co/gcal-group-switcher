@@ -2,6 +2,7 @@
 let groups = [];
 let allCalendars = [];
 let lastDebugInfo = '';
+let editingGroupIndex = null;
 
 // 初期化
 document.addEventListener('DOMContentLoaded', async () => {
@@ -19,6 +20,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 // イベントリスナーの設定
 function setupEventListeners() {
   document.getElementById('createGroup').addEventListener('click', createGroup);
+  document.getElementById('cancelEdit').addEventListener('click', cancelEdit);
   document.getElementById('memberInput').addEventListener('input', handleMemberInput);
   document.getElementById('memberInput').addEventListener('keydown', handleKeyDown);
   document.getElementById('showDebugInfo').addEventListener('click', showDebugInfo);
@@ -82,7 +84,7 @@ function renderGroupList() {
   groupListElement.innerHTML = groups.map((group, index) => `
     <div class="group-item" data-index="${index}">
       <div class="group-content">
-        <div>
+        <div class="group-info">
           <div class="group-name">${escapeHtml(group.name)}</div>
           <div class="group-members">${group.members.length}人: ${escapeHtml(group.members.slice(0, 3).join(', '))}${group.members.length > 3 ? '...' : ''}</div>
         </div>
@@ -100,6 +102,7 @@ function renderGroupList() {
             </button>` : '<div class="btn-icon-placeholder"></div>'}
           </div>
           <button class="btn btn-primary btn-small apply-btn" data-index="${index}">適用</button>
+          <button class="btn btn-secondary btn-small edit-btn" data-index="${index}">編集</button>
           <button class="btn btn-danger btn-small delete-btn" data-index="${index}">削除</button>
         </div>
       </div>
@@ -111,6 +114,13 @@ function renderGroupList() {
     btn.addEventListener('click', (e) => {
       const index = parseInt(e.target.dataset.index);
       applyGroup(index);
+    });
+  });
+  
+  document.querySelectorAll('.edit-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const index = parseInt(e.target.dataset.index);
+      editGroup(index);
     });
   });
   
@@ -136,6 +146,22 @@ function renderGroupList() {
   });
 }
 
+// 編集をキャンセル
+function cancelEdit() {
+  editingGroupIndex = null;
+  
+  // フォームをクリア
+  document.getElementById('groupName').value = '';
+  document.getElementById('memberInput').value = '';
+  
+  // ボタンとタイトルを元に戻す
+  document.getElementById('createGroup').textContent = 'グループ作成';
+  document.querySelector('.create-section h3').textContent = '新規グループ作成';
+  document.getElementById('cancelEdit').style.display = 'none';
+  
+  showMessage('編集をキャンセルしました', 'success');
+}
+
 // グループの作成
 async function createGroup() {
   const nameInput = document.getElementById('groupName');
@@ -149,14 +175,21 @@ async function createGroup() {
     return;
   }
   
-  groups.push({ name, members });
+  if (editingGroupIndex !== null) {
+    // 編集モード
+    groups[editingGroupIndex] = { name, members };
+    showMessage('グループを更新しました', 'success');
+    cancelEdit();
+  } else {
+    // 新規作成モード
+    groups.push({ name, members });
+    showMessage('グループを作成しました', 'success');
+    nameInput.value = '';
+    memberInput.value = '';
+  }
+  
   await chrome.storage.local.set({ calendarGroups: groups });
-  
-  nameInput.value = '';
-  memberInput.value = '';
-  
   renderGroupList();
-  showMessage('グループを作成しました', 'success');
 }
 
 // グループの適用
@@ -187,6 +220,28 @@ async function applyGroup(index) {
       showMessage('適用に失敗しました', 'error');
     }
   }
+}
+
+// グループの編集
+function editGroup(index) {
+  const group = groups[index];
+  
+  // 編集モードに切り替え
+  editingGroupIndex = index;
+  
+  // フォームに値を設定
+  document.getElementById('groupName').value = group.name;
+  document.getElementById('memberInput').value = group.members.join('\n');
+  
+  // ボタンとタイトルを変更
+  document.getElementById('createGroup').textContent = 'グループ更新';
+  document.querySelector('.create-section h3').textContent = 'グループ編集';
+  document.getElementById('cancelEdit').style.display = 'inline-block';
+  
+  // 作成セクションまでスクロール
+  document.querySelector('.create-section').scrollIntoView({ behavior: 'smooth' });
+  
+  showMessage(`"${group.name}" を編集中`, 'success');
 }
 
 // グループの削除

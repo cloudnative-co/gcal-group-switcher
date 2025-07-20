@@ -99,24 +99,36 @@ h3 {
   justify-content: space-between;
   align-items: center;
   width: 100%;
+  gap: 12px;
+}
+
+.group-info {
+  flex: 1;
+  min-width: 0;
 }
 
 .group-name {
   font-weight: 500;
   color: #3c4043;
-  flex-grow: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .group-members {
   font-size: 12px;
   color: #5f6368;
   margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .group-actions {
   display: flex;
   gap: 4px;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .group-order-buttons {
@@ -124,6 +136,7 @@ h3 {
   flex-direction: column;
   gap: 2px;
   margin-right: 8px;
+  width: 24px;
 }
 
 .btn-icon {
@@ -137,6 +150,8 @@ h3 {
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 20px;
+  height: 20px;
 }
 
 .btn-icon:hover {
@@ -147,6 +162,15 @@ h3 {
 .btn-icon-placeholder {
   width: 20px;
   height: 20px;
+}
+
+.button-group {
+  display: flex;
+  gap: 8px;
+}
+
+.button-group .btn {
+  flex: 1;
 }
 
 .btn {
@@ -162,6 +186,7 @@ h3 {
 .btn-small {
   padding: 4px 8px;
   font-size: 12px;
+  min-width: 40px;
 }
 
 .btn-primary {
