@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Google Calendar Group Switcher",
-  "version": "1.0.4",
+  "version": "1.1.0",
   "description": "Googleカレンダーで複数人のカレンダーをグループ化して素早く表示切替",
   "permissions": [
     "storage",
