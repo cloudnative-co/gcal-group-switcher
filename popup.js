@@ -5,10 +5,15 @@ let lastDebugInfo = '';
 
 // 初期化
 document.addEventListener('DOMContentLoaded', async () => {
-  await loadGroups();
-  await loadCalendars();
-  renderGroupList();
-  setupEventListeners();
+  try {
+    await loadGroups();
+    await loadCalendars();
+    renderGroupList();
+    setupEventListeners();
+  } catch (error) {
+    console.error('初期化エラー:', error);
+    showMessage('初期化に失敗しました。ページをリロードしてください。', 'error');
+  }
 });
 
 // イベントリスナーの設定
@@ -35,17 +40,32 @@ async function loadGroups() {
 
 // カレンダーリストの読み込み
 async function loadCalendars() {
-  // content.jsからカレンダーリストを取得
-  const tabs = await chrome.tabs.query({active: true, currentWindow: true});
-  if (tabs[0].url.includes('calendar.google.com')) {
-    try {
-      const response = await chrome.tabs.sendMessage(tabs[0].id, {action: 'getCalendars'});
-      if (response && response.calendars) {
-        allCalendars = response.calendars;
-      }
-    } catch (error) {
-      console.error('カレンダーリストの取得に失敗:', error);
+  try {
+    // content.jsからカレンダーリストを取得
+    const tabs = await chrome.tabs.query({active: true, currentWindow: true});
+    if (!tabs || tabs.length === 0) {
+      console.error('アクティブなタブが見つかりません');
+      return;
     }
+    
+    if (tabs[0].url && tabs[0].url.includes('calendar.google.com')) {
+      try {
+        // タブがまだ読み込み中の場合は少し待つ
+        if (tabs[0].status !== 'complete') {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        
+        const response = await chrome.tabs.sendMessage(tabs[0].id, {action: 'getCalendars'});
+        if (response && response.calendars) {
+          allCalendars = response.calendars;
+        }
+      } catch (error) {
+        console.error('カレンダーリストの取得に失敗:', error);
+        // エラーを無視して続行（オートコンプリートが使えないだけ）
+      }
+    }
+  } catch (error) {
+    console.error('タブクエリエラー:', error);
   }
 }
 
@@ -321,8 +341,7 @@ ${i + 1}. aria-label: "${s.ariaLabel}"
 `).join('')}
 
 【使用方法】
-カレンダー名は「マイカレンダー」および
-「他のカレンダー」に表示されている名称を
+カレンダー名はaria-labelの値を
 そのまま使用してください。
 例: "Shintaro Okamura"`;
     
