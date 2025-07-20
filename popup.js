@@ -81,13 +81,27 @@ function renderGroupList() {
   
   groupListElement.innerHTML = groups.map((group, index) => `
     <div class="group-item" data-index="${index}">
-      <div>
-        <div class="group-name">${escapeHtml(group.name)}</div>
-        <div class="group-members">${group.members.length}人: ${escapeHtml(group.members.slice(0, 3).join(', '))}${group.members.length > 3 ? '...' : ''}</div>
-      </div>
-      <div class="group-actions">
-        <button class="btn btn-primary btn-small apply-btn" data-index="${index}">適用</button>
-        <button class="btn btn-danger btn-small delete-btn" data-index="${index}">削除</button>
+      <div class="group-content">
+        <div>
+          <div class="group-name">${escapeHtml(group.name)}</div>
+          <div class="group-members">${group.members.length}人: ${escapeHtml(group.members.slice(0, 3).join(', '))}${group.members.length > 3 ? '...' : ''}</div>
+        </div>
+        <div class="group-actions">
+          <div class="group-order-buttons">
+            ${index > 0 ? `<button class="btn-icon move-up-btn" data-index="${index}" title="上へ移動">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="18 15 12 9 6 15"></polyline>
+              </svg>
+            </button>` : '<div class="btn-icon-placeholder"></div>'}
+            ${index < groups.length - 1 ? `<button class="btn-icon move-down-btn" data-index="${index}" title="下へ移動">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>` : '<div class="btn-icon-placeholder"></div>'}
+          </div>
+          <button class="btn btn-primary btn-small apply-btn" data-index="${index}">適用</button>
+          <button class="btn btn-danger btn-small delete-btn" data-index="${index}">削除</button>
+        </div>
       </div>
     </div>
   `).join('');
@@ -104,6 +118,20 @@ function renderGroupList() {
     btn.addEventListener('click', (e) => {
       const index = parseInt(e.target.dataset.index);
       deleteGroup(index);
+    });
+  });
+  
+  document.querySelectorAll('.move-up-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const index = parseInt(e.currentTarget.dataset.index);
+      moveGroup(index, index - 1);
+    });
+  });
+  
+  document.querySelectorAll('.move-down-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const index = parseInt(e.currentTarget.dataset.index);
+      moveGroup(index, index + 1);
     });
   });
 }
@@ -293,6 +321,28 @@ async function showMyCalendarOnly() {
   }
 }
 
+// グループの順番を入れ替える
+async function moveGroup(fromIndex, toIndex) {
+  // 配列の要素を入れ替え
+  const [movedGroup] = groups.splice(fromIndex, 1);
+  groups.splice(toIndex, 0, movedGroup);
+  
+  // 保存
+  await chrome.storage.local.set({ calendarGroups: groups });
+  
+  // 再描画
+  renderGroupList();
+  
+  // アニメーション効果のためにハイライト
+  const movedItem = document.querySelector(`.group-item[data-index="${toIndex}"]`);
+  if (movedItem) {
+    movedItem.classList.add('group-item-moved');
+    setTimeout(() => {
+      movedItem.classList.remove('group-item-moved');
+    }, 300);
+  }
+}
+
 // HTMLエスケープ
 function escapeHtml(text) {
   const div = document.createElement('div');
@@ -368,7 +418,8 @@ ${i + 1}. aria-label: "${s.ariaLabel}"
 `).join('')}
 
 【使用方法】
-カレンダー名はaria-labelの値を
+カレンダー名は「マイカレンダー」および
+「他のカレンダー」に表示されている名前を
 そのまま使用してください。
 例: "Shintaro Okamura"`;
     

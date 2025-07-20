@@ -66,17 +66,38 @@ h3 {
 
 .group-item {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
   padding: 8px 12px;
   border-radius: 4px;
   margin-bottom: 4px;
   background-color: #f8f9fa;
-  transition: background-color 0.2s;
+  transition: background-color 0.2s, transform 0.2s;
 }
 
 .group-item:hover {
   background-color: #e8f0fe;
+}
+
+.group-item-moved {
+  animation: highlight 0.3s ease-out;
+}
+
+@keyframes highlight {
+  0% {
+    background-color: #c2e0ff;
+    transform: scale(1.02);
+  }
+  100% {
+    background-color: #e8f0fe;
+    transform: scale(1);
+  }
+}
+
+.group-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
 }
 
 .group-name {
@@ -94,6 +115,37 @@ h3 {
 .group-actions {
   display: flex;
   gap: 4px;
+  align-items: center;
+}
+
+.group-order-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-right: 8px;
+}
+
+.btn-icon {
+  padding: 2px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 4px;
+  color: #5f6368;
+  transition: background-color 0.2s, color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-icon:hover {
+  background-color: #e8eaed;
+  color: #3c4043;
+}
+
+.btn-icon-placeholder {
+  width: 20px;
+  height: 20px;
 }
 
 .btn {
