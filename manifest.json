@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Google Calendar Group Switcher",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Googleカレンダーで複数人のカレンダーをグループ化して素早く表示切替",
   "permissions": [
     "storage",
@@ -13,7 +13,8 @@
     "https://calendar.google.com/*"
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
   "action": {
     "default_popup": "popup.html",
@@ -26,7 +27,7 @@
   "content_scripts": [
     {
       "matches": ["https://calendar.google.com/*"],
-      "js": ["content.js"],
+      "js": ["errorHandler.js", "content.js"],
       "css": ["content.css"],
       "run_at": "document_idle"
     }

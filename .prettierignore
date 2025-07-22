@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+out/
+
+# Test outputs
+coverage/
+playwright-report/
+test-results/
+
+# Logs
+*.log
+npm-debug.log*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Minified files
+*.min.js
+*.min.css
+
+# Lock files (format manually if needed)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml

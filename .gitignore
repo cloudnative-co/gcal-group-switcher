@@ -55,6 +55,11 @@ secrets/
 coverage/
 .nyc_output/
 
+# Playwright test results
+test-results/
+playwright-report/
+playwright/.cache/
+
 # Documentation build
 docs/_build/
 docs/.doctrees/

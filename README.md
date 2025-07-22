@@ -136,14 +136,26 @@ gcal-group-switcher/
 ├── manifest.json        # 拡張機能の設定ファイル
 ├── background.js        # バックグラウンドサービスワーカー
 ├── popup.html          # ポップアップのHTML
-├── popup.js            # ポップアップの動作ロジック
+├── popup.js            # ポップアップのメインロジック
 ├── popup.css           # ポップアップのスタイル
 ├── content.js          # Googleカレンダーページで動作するスクリプト
 ├── content.css         # コンテンツスクリプト用のスタイル
+├── errorHandler.js     # エラーハンドリングモジュール
+├── groupManager.js     # グループ管理モジュール
+├── calendarService.js  # カレンダーサービスモジュール
+├── uiManager.js        # UI管理モジュール
+├── virtualScroll.js    # 仮想スクロールモジュール
+├── debug.html          # デバッグページ
 ├── icon.svg            # アイコン（SVG版）
 ├── icon16.png          # アイコン（16×16）
 ├── icon48.png          # アイコン（48×48）
 ├── icon128.png         # アイコン（128×128）
+├── tests/              # テストファイル
+│   ├── unit/          # 単体テスト
+│   └── e2e/           # E2Eテスト
+├── .github/            # GitHub Actions設定
+├── package.json        # npm設定
+├── CHANGELOG.md        # 変更履歴
 └── README.md           # このファイル
 ```
 
@@ -166,21 +178,7 @@ gcal-group-switcher/
 
 ### バージョン履歴
 
-- **v1.1.0** (最新)
-  - グループの編集機能を追加
-  - ドラッグ＆ドロップによる並び替え機能
-  - グループの展開/折りたたみ機能
-  - UIの改善（よりコンパクトに）
-  - GitHubリンクをヘッダーに移動
-- **v1.0.4**
-  - グループの並び替え機能（矢印ボタン）を追加
-- **v1.0.3**
-  - 「自分のカレンダーのみ表示」機能を追加
-- **v1.0.2**
-  - ポップアップの安定性向上
-  - バックグラウンドサービスワーカー追加
-- **v1.0.0**
-  - 初回リリース
+最新のバージョン履歴は [CHANGELOG.md](CHANGELOG.md) をご覧ください。
 
 ### カスタマイズ
 

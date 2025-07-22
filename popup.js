@@ -1,599 +1,527 @@
-// グループデータの管理
-let groups = [];
-let allCalendars = [];
-let lastDebugInfo = '';
-let editingGroupIndex = null;
-let expandedGroups = new Set();
+/**
+ * メインアプリケーションファイル
+ * 各モジュールを統合して、拡張機能の動作を管理
+ */
 
-// 初期化
-document.addEventListener('DOMContentLoaded', async () => {
-  try {
-    await loadGroups();
-    await loadCalendars();
-    renderGroupList();
-    setupEventListeners();
-  } catch (error) {
-    console.error('初期化エラー:', error);
-    showMessage('初期化に失敗しました。ページをリロードしてください。', 'error');
-  }
-});
-
-// イベントリスナーの設定
-function setupEventListeners() {
-  document.getElementById('createGroup').addEventListener('click', createGroup);
-  document.getElementById('cancelEdit').addEventListener('click', cancelEdit);
-  document.getElementById('memberInput').addEventListener('input', handleMemberInput);
-  document.getElementById('memberInput').addEventListener('keydown', handleKeyDown);
-  document.getElementById('showDebugInfo').addEventListener('click', showDebugInfo);
-  document.getElementById('copyDebugInfo').addEventListener('click', copyDebugInfo);
-  document.getElementById('showMyCalendarOnly').addEventListener('click', showMyCalendarOnly);
-  
-  // クリックでオートコンプリートを閉じる
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('.member-input-container')) {
-      hideAutocomplete();
-    }
-  });
-}
-
-// 保存済みグループの読み込み
-async function loadGroups() {
-  const result = await chrome.storage.local.get(['calendarGroups']);
-  groups = result.calendarGroups || [];
-}
-
-// カレンダーリストの読み込み
-async function loadCalendars() {
-  try {
-    // content.jsからカレンダーリストを取得
-    const tabs = await chrome.tabs.query({active: true, currentWindow: true});
-    if (!tabs || tabs.length === 0) {
-      console.error('アクティブなタブが見つかりません');
-      return;
-    }
+// アプリケーションのメインクラス
+class CalendarGroupApp {
+  constructor() {
+    this.groupManager = groupManager;
+    this.calendarService = calendarService;
+    this.uiManager = new UIManager(this.groupManager);
+    this.autocompleteManager = null;
+    this.lastDebugInfo = '';
     
-    if (tabs[0].url && tabs[0].url.includes('calendar.google.com')) {
-      try {
-        // タブがまだ読み込み中の場合は少し待つ
-        if (tabs[0].status !== 'complete') {
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-        
-        const response = await chrome.tabs.sendMessage(tabs[0].id, {action: 'getCalendars'});
-        if (response && response.calendars) {
-          allCalendars = response.calendars;
-        }
-      } catch (error) {
-        console.error('カレンダーリストの取得に失敗:', error);
-        // エラーを無視して続行（オートコンプリートが使えないだけ）
-      }
-    }
-  } catch (error) {
-    console.error('タブクエリエラー:', error);
+    // イベントリスナーをバインド
+    this.bindEvents();
   }
-}
 
-// グループリストの表示
-function renderGroupList() {
-  const groupListElement = document.getElementById('groupList');
-  
-  if (groups.length === 0) {
-    groupListElement.innerHTML = '<p style="color: #5f6368; text-align: center;">保存済みグループはありません</p>';
-    return;
-  }
-  
-  groupListElement.innerHTML = groups.map((group, index) => {
-    const isExpanded = expandedGroups.has(index);
-    return `
-    <div class="group-item ${isExpanded ? 'expanded' : ''}" data-index="${index}" draggable="true">
-      <div class="group-content">
-        <div class="drag-handle" title="ドラッグして並び替え">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <circle cx="9" cy="5" r="1.5"/>
-            <circle cx="15" cy="5" r="1.5"/>
-            <circle cx="9" cy="12" r="1.5"/>
-            <circle cx="15" cy="12" r="1.5"/>
-            <circle cx="9" cy="19" r="1.5"/>
-            <circle cx="15" cy="19" r="1.5"/>
-          </svg>
-        </div>
-        <div class="group-info" data-index="${index}">
-          <div class="group-header">
-            <div class="expand-icon">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="${isExpanded ? '6 9 12 15 18 9' : '9 6 15 12 9 18'}"></polyline>
-              </svg>
-            </div>
-            <div class="group-name">${escapeHtml(group.name)}</div>
-            <div class="group-count">(${group.members.length}人)</div>
-          </div>
-        </div>
-        <div class="group-actions">
-          <button class="btn btn-primary btn-small apply-btn" data-index="${index}">適用</button>
-          <button class="btn btn-secondary btn-small edit-btn" data-index="${index}">編集</button>
-          <button class="btn btn-danger btn-small delete-btn" data-index="${index}">削除</button>
-        </div>
-      </div>
-      ${isExpanded ? `
-        <div class="group-members-list">
-          ${group.members.map(member => `
-            <div class="member-item">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                <circle cx="12" cy="7" r="4"></circle>
-              </svg>
-              ${escapeHtml(member)}
-            </div>
-          `).join('')}
-        </div>
-      ` : ''}
-    </div>
-  `}).join('');
-  
-  // イベントリスナーを設定
-  document.querySelectorAll('.group-info').forEach(info => {
-    info.addEventListener('click', (e) => {
-      // ボタンのクリックは除外
-      if (!e.target.closest('.group-actions')) {
-        const index = parseInt(info.dataset.index);
-        toggleGroupExpansion(index);
-      }
-    });
-  });
-  
-  document.querySelectorAll('.apply-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const index = parseInt(e.target.dataset.index);
-      applyGroup(index);
-    });
-  });
-  
-  document.querySelectorAll('.edit-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const index = parseInt(e.target.dataset.index);
-      editGroup(index);
-    });
-  });
-  
-  document.querySelectorAll('.delete-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const index = parseInt(e.target.dataset.index);
-      deleteGroup(index);
-    });
-  });
-  
-  // ドラッグ＆ドロップのイベントリスナー
-  setupDragAndDrop();
-}
-
-// 編集をキャンセル
-function cancelEdit() {
-  editingGroupIndex = null;
-  
-  // フォームをクリア
-  document.getElementById('groupName').value = '';
-  document.getElementById('memberInput').value = '';
-  
-  // ボタンとタイトルを元に戻す
-  document.getElementById('createGroup').textContent = 'グループ作成';
-  document.querySelector('.create-section h3').textContent = '新規グループ作成';
-  document.getElementById('cancelEdit').style.display = 'none';
-  
-  showMessage('編集をキャンセルしました', 'success');
-}
-
-// グループの作成
-async function createGroup() {
-  const nameInput = document.getElementById('groupName');
-  const memberInput = document.getElementById('memberInput');
-  
-  const name = nameInput.value.trim();
-  const members = memberInput.value.split('\n').map(m => m.trim()).filter(m => m);
-  
-  if (!name || members.length === 0) {
-    showMessage('グループ名とメンバーを入力してください', 'error');
-    return;
-  }
-  
-  if (editingGroupIndex !== null) {
-    // 編集モード
-    groups[editingGroupIndex] = { name, members };
-    showMessage('グループを更新しました', 'success');
-    cancelEdit();
-  } else {
-    // 新規作成モード
-    groups.push({ name, members });
-    showMessage('グループを作成しました', 'success');
-    nameInput.value = '';
-    memberInput.value = '';
-  }
-  
-  await chrome.storage.local.set({ calendarGroups: groups });
-  renderGroupList();
-}
-
-// グループの適用
-async function applyGroup(index) {
-  const group = groups[index];
-  
-  // content.jsにメッセージを送信してカレンダーを切り替え
-  const tabs = await chrome.tabs.query({active: true, currentWindow: true});
-  if (tabs[0].url.includes('calendar.google.com')) {
+  /**
+   * アプリケーションの初期化
+   */
+  async initialize() {
     try {
-      const response = await chrome.tabs.sendMessage(tabs[0].id, {
-        action: 'applyGroup',
-        members: group.members
-      });
-      
-      if (response && response.success) {
-        showMessage(`"${group.name}" を適用しました`, 'success');
-        
-        // ポップアップを自動で閉じる
-        setTimeout(() => {
-          window.close();
-        }, 1000);
-      } else {
-        showMessage('適用に失敗しました', 'error');
-      }
+      await this.groupManager.loadGroups();
+      await this.calendarService.loadCalendars();
+      this.uiManager.renderGroupList();
+      this.setupEventListeners();
+      this.autocompleteManager = new AutocompleteManager(
+        this.calendarService.getCalendarList()
+      );
     } catch (error) {
-      console.error('適用エラー:', error);
-      showMessage('適用に失敗しました', 'error');
+      ErrorHandler.logError(error);
+      ErrorHandler.showUserError(error);
     }
   }
-}
 
-// グループの編集
-function editGroup(index) {
-  const group = groups[index];
-  
-  // 編集モードに切り替え
-  editingGroupIndex = index;
-  
-  // フォームに値を設定
-  document.getElementById('groupName').value = group.name;
-  document.getElementById('memberInput').value = group.members.join('\n');
-  
-  // ボタンとタイトルを変更
-  document.getElementById('createGroup').textContent = 'グループ更新';
-  document.querySelector('.create-section h3').textContent = 'グループ編集';
-  document.getElementById('cancelEdit').style.display = 'inline-block';
-  
-  // 作成セクションまでスクロール
-  document.querySelector('.create-section').scrollIntoView({ behavior: 'smooth' });
-  
-  showMessage(`"${group.name}" を編集中`, 'success');
-}
-
-// グループの削除
-async function deleteGroup(index) {
-  const group = groups[index];
-  if (confirm(`グループ "${group.name}" を削除しますか？`)) {
-    groups.splice(index, 1);
-    await chrome.storage.local.set({ calendarGroups: groups });
-    renderGroupList();
-    showMessage('グループを削除しました', 'success');
-  }
-}
-
-// オートコンプリート機能
-function handleMemberInput(e) {
-  const input = e.target;
-  const lines = input.value.split('\n');
-  const currentLine = lines[lines.length - 1];
-  
-  if (currentLine.length < 1) {
-    hideAutocomplete();
-    return;
-  }
-  
-  const matches = allCalendars.filter(cal => 
-    cal.toLowerCase().includes(currentLine.toLowerCase())
-  );
-  
-  if (matches.length > 0) {
-    showAutocomplete(matches, currentLine);
-  } else {
-    hideAutocomplete();
-  }
-}
-
-// オートコンプリートの表示
-function showAutocomplete(matches, currentInput) {
-  const list = document.getElementById('autocompleteList');
-  list.innerHTML = matches.map(match => 
-    `<div class="autocomplete-item" data-value="${escapeHtml(match)}">${escapeHtml(match)}</div>`
-  ).join('');
-  
-  list.style.display = 'block';
-  
-  // クリックイベントの設定
-  list.querySelectorAll('.autocomplete-item').forEach(item => {
-    item.addEventListener('click', () => {
-      selectAutocompleteItem(item.dataset.value);
+  /**
+   * イベントリスナーの設定
+   */
+  setupEventListeners() {
+    document.getElementById('createGroup').addEventListener('click', () => this.handleCreateGroup());
+    document.getElementById('cancelEdit').addEventListener('click', () => this.handleCancelEdit());
+    document.getElementById('memberInput').addEventListener('input', (e) => this.autocompleteManager?.handleInput(e));
+    document.getElementById('memberInput').addEventListener('keydown', (e) => this.autocompleteManager?.handleKeyDown(e));
+    document.getElementById('showDebugInfo').addEventListener('click', () => this.showDebugInfo());
+    document.getElementById('copyDebugInfo').addEventListener('click', () => this.copyDebugInfo());
+    document.getElementById('showMyCalendarOnly').addEventListener('click', () => this.showMyCalendarOnly());
+    
+    // クリックでオートコンプリートを閉じる
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.member-input-container')) {
+        this.autocompleteManager?.hide();
+      }
     });
-  });
-}
-
-// オートコンプリートの非表示
-function hideAutocomplete() {
-  document.getElementById('autocompleteList').style.display = 'none';
-}
-
-// オートコンプリート項目の選択
-function selectAutocompleteItem(value) {
-  const input = document.getElementById('memberInput');
-  const lines = input.value.split('\n');
-  lines[lines.length - 1] = value;
-  input.value = lines.join('\n') + '\n';
-  input.focus();
-  hideAutocomplete();
-}
-
-// キーボード操作
-function handleKeyDown(e) {
-  const list = document.getElementById('autocompleteList');
-  const items = list.querySelectorAll('.autocomplete-item');
-  const selected = list.querySelector('.autocomplete-item.selected');
-  
-  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-    e.preventDefault();
-    
-    if (items.length === 0) return;
-    
-    let index = Array.from(items).indexOf(selected);
-    
-    if (e.key === 'ArrowDown') {
-      index = index < items.length - 1 ? index + 1 : 0;
-    } else {
-      index = index > 0 ? index - 1 : items.length - 1;
-    }
-    
-    items.forEach(item => item.classList.remove('selected'));
-    items[index].classList.add('selected');
-    items[index].scrollIntoView({ block: 'nearest' });
-  } else if (e.key === 'Enter' && selected) {
-    e.preventDefault();
-    selectAutocompleteItem(selected.dataset.value);
-  } else if (e.key === 'Escape') {
-    hideAutocomplete();
   }
-}
 
-// メッセージの表示
-function showMessage(text, type) {
-  const messageElement = document.getElementById('message');
-  messageElement.textContent = text;
-  messageElement.className = `message ${type}`;
-  
-  setTimeout(() => {
-    messageElement.className = 'message';
-  }, 3000);
-}
+  /**
+   * カスタムイベントのバインド
+   */
+  bindEvents() {
+    window.addEventListener('applyGroup', (e) => this.applyGroup(e.detail.index));
+    window.addEventListener('editGroup', (e) => this.editGroup(e.detail.index));
+    window.addEventListener('deleteGroup', (e) => this.deleteGroup(e.detail.index));
+    window.addEventListener('moveGroup', (e) => this.moveGroup(e.detail.fromIndex, e.detail.toIndex));
+  }
 
-// 自分のカレンダーのみを表示
-async function showMyCalendarOnly() {
-  const tabs = await chrome.tabs.query({active: true, currentWindow: true});
-  if (tabs[0].url.includes('calendar.google.com')) {
+  /**
+   * グループの作成/更新
+   */
+  async handleCreateGroup() {
     try {
-      const response = await chrome.tabs.sendMessage(tabs[0].id, {
-        action: 'showMyCalendarOnly'
-      });
+      const { name, members } = this.uiManager.getFormValues();
+      const editingIndex = this.groupManager.getEditingGroupIndex();
       
-      if (response && response.success) {
-        showMessage('自分のカレンダーのみを表示しました', 'success');
-        
-        // ポップアップを自動で閉じる
-        setTimeout(() => {
-          window.close();
-        }, 1000);
+      if (editingIndex !== null) {
+        // 更新
+        await this.groupManager.updateGroup(editingIndex, name, members);
+        showSuccessMessage('グループを更新しました');
+        this.handleCancelEdit();
       } else {
-        showMessage('操作に失敗しました', 'error');
+        // 新規作成
+        await this.groupManager.createGroup(name, members);
+        showSuccessMessage('グループを作成しました');
+        this.uiManager.clearEditForm();
       }
+      
+      this.uiManager.renderGroupList();
     } catch (error) {
-      console.error('エラー:', error);
-      showMessage('操作に失敗しました', 'error');
+      ErrorHandler.logError(error);
+      ErrorHandler.showUserError(error);
     }
   }
-}
 
-// ドラッグ＆ドロップの設定
-let draggedElement = null;
-let draggedIndex = null;
-
-function setupDragAndDrop() {
-  const items = document.querySelectorAll('.group-item');
-  
-  items.forEach(item => {
-    item.addEventListener('dragstart', handleDragStart);
-    item.addEventListener('dragenter', handleDragEnter);
-    item.addEventListener('dragover', handleDragOver);
-    item.addEventListener('dragleave', handleDragLeave);
-    item.addEventListener('drop', handleDrop);
-    item.addEventListener('dragend', handleDragEnd);
-  });
-}
-
-function handleDragStart(e) {
-  draggedElement = this;
-  draggedIndex = parseInt(this.dataset.index);
-  this.classList.add('dragging');
-  e.dataTransfer.effectAllowed = 'move';
-  e.dataTransfer.setData('text/html', this.innerHTML);
-}
-
-function handleDragEnter(e) {
-  if (this !== draggedElement) {
-    this.classList.add('drag-over');
+  /**
+   * 編集のキャンセル
+   */
+  handleCancelEdit() {
+    this.groupManager.cancelEdit();
+    this.uiManager.clearEditForm();
+    showSuccessMessage('編集をキャンセルしました');
   }
-}
 
-function handleDragOver(e) {
-  if (e.preventDefault) {
-    e.preventDefault();
-  }
-  e.dataTransfer.dropEffect = 'move';
-  return false;
-}
-
-function handleDragLeave(e) {
-  this.classList.remove('drag-over');
-}
-
-function handleDrop(e) {
-  if (e.stopPropagation) {
-    e.stopPropagation();
-  }
-  
-  const dropIndex = parseInt(this.dataset.index);
-  
-  if (draggedElement !== this) {
-    // 配列内で要素を移動
-    const [movedGroup] = groups.splice(draggedIndex, 1);
-    groups.splice(dropIndex, 0, movedGroup);
-    
-    // 保存して再描画
-    chrome.storage.local.set({ calendarGroups: groups }).then(() => {
-      renderGroupList();
-    });
-  }
-  
-  return false;
-}
-
-function handleDragEnd(e) {
-  const items = document.querySelectorAll('.group-item');
-  items.forEach(item => {
-    item.classList.remove('drag-over', 'dragging');
-  });
-}
-
-// グループの展開/折りたたみ
-function toggleGroupExpansion(index) {
-  if (expandedGroups.has(index)) {
-    expandedGroups.delete(index);
-  } else {
-    expandedGroups.add(index);
-  }
-  renderGroupList();
-}
-
-// HTMLエスケープ
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
-
-// デバッグ情報を表示
-async function showDebugInfo() {
-  const debugDiv = document.getElementById('debugInfo');
-  const copyButton = document.getElementById('copyDebugInfo');
-  debugDiv.style.display = 'block';
-  debugDiv.innerHTML = 'デバッグ情報を取得中...';
-  
-  try {
-    const tabs = await chrome.tabs.query({active: true, currentWindow: true});
-    
-    if (!tabs[0].url.includes('calendar.google.com')) {
-      debugDiv.innerHTML = 'エラー: Googleカレンダーのページではありません';
-      return;
-    }
-    
-    // カレンダーリストを取得
-    let calendarsInfo = '取得失敗';
+  /**
+   * グループの適用
+   */
+  async applyGroup(index) {
     try {
-      const response = await chrome.tabs.sendMessage(tabs[0].id, {action: 'getCalendars'});
-      if (response && response.calendars) {
-        calendarsInfo = `取得成功: ${response.calendars.length}個\n` + 
-                       response.calendars.slice(0, 5).join('\n') + 
-                       (response.calendars.length > 5 ? '\n...' : '');
+      const group = this.groupManager.getGroup(index);
+      if (!group) {
+        throw new Error('グループが見つかりません');
       }
-    } catch (e) {
-      calendarsInfo = 'エラー: ' + e.message;
+      
+      await this.calendarService.applyGroup(group.members);
+      showSuccessMessage(`"${group.name}" を適用しました`);
+      
+      // ポップアップを自動で閉じる
+      setTimeout(() => {
+        window.close();
+      }, 1000);
+    } catch (error) {
+      ErrorHandler.logError(error);
+      ErrorHandler.showUserError(error);
     }
+  }
+
+  /**
+   * グループの編集
+   */
+  editGroup(index) {
+    const group = this.groupManager.getGroup(index);
+    if (!group) return;
     
-    // DOM構造を確認
-    const [domInfo] = await chrome.scripting.executeScript({
-      target: { tabId: tabs[0].id },
-      function: () => {
-        const checkboxes = document.querySelectorAll('input[type="checkbox"][aria-label]');
-        const info = {
-          checkboxCount: checkboxes.length,
-          samples: []
-        };
-        
-        checkboxes.forEach((cb, index) => {
-          if (index < 3) {
-            info.samples.push({
-              ariaLabel: cb.getAttribute('aria-label'),
-              checked: cb.checked,
-              id: cb.id || 'なし'
-            });
-          }
+    this.groupManager.setEditingGroupIndex(index);
+    this.uiManager.setEditFormValues(group.name, group.members);
+    showSuccessMessage(`"${group.name}" を編集中`);
+  }
+
+  /**
+   * グループの削除
+   */
+  async deleteGroup(index) {
+    try {
+      const group = this.groupManager.getGroup(index);
+      if (!group) {
+        throw new Error('グループが見つかりません');
+      }
+      
+      if (confirm(`グループ "${group.name}" を削除しますか？`)) {
+        await this.groupManager.deleteGroup(index);
+        this.uiManager.animateGroupDeletion(index, () => {
+          showSuccessMessage('グループを削除しました');
         });
-        
-        return info;
       }
-    });
+    } catch (error) {
+      ErrorHandler.logError(error);
+      ErrorHandler.showUserError(error);
+    }
+  }
+
+  /**
+   * グループの移動
+   */
+  async moveGroup(fromIndex, toIndex) {
+    try {
+      await this.groupManager.moveGroup(fromIndex, toIndex);
+      this.uiManager.renderGroupList();
+      showSuccessMessage('グループの順序を変更しました');
+    } catch (error) {
+      // エラー時は元に戻す
+      await this.groupManager.moveGroup(toIndex, fromIndex);
+      ErrorHandler.logError(error);
+      ErrorHandler.showUserError(error);
+    }
+  }
+
+  /**
+   * 自分のカレンダーのみを表示
+   */
+  async showMyCalendarOnly() {
+    try {
+      await this.calendarService.showMyCalendarOnly();
+      showSuccessMessage('自分のカレンダーのみを表示しました');
+      
+      // ポップアップを自動で閉じる
+      setTimeout(() => {
+        window.close();
+      }, 1000);
+    } catch (error) {
+      ErrorHandler.logError(error);
+      ErrorHandler.showUserError(error);
+    }
+  }
+
+  /**
+   * デバッグ情報を表示
+   */
+  async showDebugInfo() {
+    const debugDiv = document.getElementById('debugInfo');
+    const copyButton = document.getElementById('copyDebugInfo');
+    debugDiv.style.display = 'block';
+    debugDiv.innerHTML = 'デバッグ情報を取得中...';
     
-    const debugInfo = `=== デバッグ情報 ===
+    try {
+      const environmentInfo = {
+        timestamp: new Date().toISOString(),
+        userAgent: navigator.userAgent,
+        extensionVersion: chrome.runtime.getManifest().version,
+        debugMode: localStorage.getItem('debug_mode') === 'true'
+      };
+      
+      const debugData = await this.calendarService.getDebugInfo();
+      const storageInfo = await chrome.storage.local.get(null);
+      const errorLogs = ErrorHandler.getRecentErrors ? ErrorHandler.getRecentErrors(10) : [];
+      
+      const debugInfo = this.formatDebugInfo({
+        environmentInfo,
+        ...debugData,
+        storageInfo,
+        errorLogs
+      });
+      
+      debugDiv.innerHTML = debugInfo.replace(/\n/g, '<br>');
+      this.lastDebugInfo = debugInfo;
+      copyButton.style.display = 'block';
+    } catch (error) {
+      ErrorHandler.logError(error);
+      const errorInfo = this.formatDebugError(error);
+      debugDiv.innerHTML = errorInfo.replace(/\n/g, '<br>');
+      this.lastDebugInfo = errorInfo;
+      copyButton.style.display = 'block';
+    }
+  }
+
+  /**
+   * デバッグ情報のフォーマット
+   */
+  formatDebugInfo(data) {
+    const { environmentInfo, tabInfo, domInfo, calendars, storageInfo, errorLogs } = data;
+    
+    return `=== デバッグ情報 ===
+生成時刻: ${new Date(environmentInfo.timestamp).toLocaleString('ja-JP')}
+拡張機能バージョン: ${environmentInfo.extensionVersion}
+デバッグモード: ${environmentInfo.debugMode ? 'ON' : 'OFF'}
+
+【タブ情報】
+URL: ${tabInfo.url}
+ステータス: ${tabInfo.status}
 
 【カレンダーリスト】
-${calendarsInfo}
+カレンダー数: ${calendars.length}個
+${calendars.slice(0, 10).map((cal, i) => `  ${i + 1}. "${cal}"`).join('\n')}
+${calendars.length > 10 ? '  ... (他にもあります)' : ''}
 
-【チェックボックス情報】
-総数: ${domInfo.result.checkboxCount}個
+【DOM構造情報】
+チェックボックス総数: ${domInfo.checkboxCount}個
+マイカレンダーセクション: ${domInfo.pageStructure?.hasMyCalendarsSection ? '存在' : '不在'}
+他のカレンダーセクション: ${domInfo.pageStructure?.hasOtherCalendarsSection ? '存在' : '不在'}
 
-【サンプル（最初の3個）】
-${domInfo.result.samples.map((s, i) => `
-${i + 1}. aria-label: "${s.ariaLabel}"
-   checked: ${s.checked}
-   id: ${s.id}
-`).join('')}
+【保存データ】
+グループ数: ${storageInfo?.calendarGroups?.length || 0}個
 
-【使用方法】
-カレンダー名は「マイカレンダー」および
-「他のカレンダー」に表示されている名前を
-そのまま使用してください。
-例: "Shintaro Okamura"`;
-    
-    debugDiv.innerHTML = debugInfo;
-    lastDebugInfo = debugInfo;
-    copyButton.style.display = 'block';
-    
-  } catch (error) {
-    const errorInfo = `エラー: ${error.message}\n\nGoogleカレンダーのページをリロードしてから再度お試しください。`;
-    debugDiv.innerHTML = errorInfo;
-    lastDebugInfo = errorInfo;
-    copyButton.style.display = 'block';
+【最近のエラー】
+${errorLogs.length > 0 ? errorLogs.slice(0, 3).map(log => `- ${log.message}`).join('\n') : 'エラーなし'}`;
+  }
+
+  /**
+   * デバッグエラーのフォーマット
+   */
+  formatDebugError(error) {
+    return `=== デバッグ情報取得エラー ===
+
+エラー: ${error.message}
+
+【対処方法】
+1. Googleカレンダーのページをリロード(F5)してください
+2. 拡張機能のポップアップを再度開いてください
+
+【基本情報】
+タイムスタンプ: ${new Date().toISOString()}
+エラー詳細: ${error.stack || error.message}`;
+  }
+
+  /**
+   * デバッグ情報をクリップボードにコピー
+   */
+  async copyDebugInfo() {
+    try {
+      await navigator.clipboard.writeText(this.lastDebugInfo);
+      showSuccessMessage('デバッグ情報をコピーしました');
+    } catch (error) {
+      // フォールバック
+      const textarea = document.createElement('textarea');
+      textarea.value = this.lastDebugInfo;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      
+      try {
+        document.execCommand('copy');
+        showSuccessMessage('デバッグ情報をコピーしました');
+      } catch (e) {
+        showErrorMessage(new Error('コピーに失敗しました'));
+      }
+      
+      document.body.removeChild(textarea);
+    }
   }
 }
 
-// デバッグ情報をクリップボードにコピー
-async function copyDebugInfo() {
-  try {
-    await navigator.clipboard.writeText(lastDebugInfo);
-    showMessage('デバッグ情報をコピーしました', 'success');
-  } catch (error) {
-    // フォールバック: テキストエリアを使用
-    const textarea = document.createElement('textarea');
-    textarea.value = lastDebugInfo;
-    textarea.style.position = 'fixed';
-    textarea.style.opacity = '0';
-    document.body.appendChild(textarea);
-    textarea.select();
+/**
+ * オートコンプリート管理クラス
+ */
+class AutocompleteManager {
+  constructor(calendars) {
+    this.calendars = calendars;
+    this.selectedIndex = -1;
+    this.currentSuggestions = [];
+  }
+
+  handleInput(e) {
+    const input = e.target;
+    const lines = input.value.split('\n');
+    const currentLine = lines[lines.length - 1];
     
-    try {
-      document.execCommand('copy');
-      showMessage('デバッグ情報をコピーしました', 'success');
-    } catch (e) {
-      showMessage('コピーに失敗しました', 'error');
+    if (currentLine.trim()) {
+      this.currentSuggestions = calendarService.getCalendarSuggestions(currentLine);
+      if (this.currentSuggestions.length > 0) {
+        this.show(input, this.currentSuggestions);
+      } else {
+        this.hide();
+      }
+    } else {
+      this.hide();
+    }
+  }
+
+  handleKeyDown(e) {
+    const autocompleteList = document.querySelector('.autocomplete-list');
+    if (!autocompleteList || autocompleteList.style.display === 'none') return;
+    
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      this.selectedIndex = Math.min(this.selectedIndex + 1, this.currentSuggestions.length - 1);
+      this.updateSelection();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      this.selectedIndex = Math.max(this.selectedIndex - 1, -1);
+      this.updateSelection();
+    } else if (e.key === 'Enter' && this.selectedIndex >= 0) {
+      e.preventDefault();
+      this.selectSuggestion(this.selectedIndex);
+    } else if (e.key === 'Escape') {
+      this.hide();
+    }
+  }
+
+  show(input, suggestions) {
+    let autocompleteList = document.querySelector('.autocomplete-list');
+    if (!autocompleteList) {
+      autocompleteList = document.createElement('div');
+      autocompleteList.className = 'autocomplete-list';
+      input.parentElement.appendChild(autocompleteList);
     }
     
-    document.body.removeChild(textarea);
+    autocompleteList.innerHTML = suggestions.map((suggestion, index) => 
+      `<div class="autocomplete-item ${index === this.selectedIndex ? 'selected' : ''}" data-index="${index}">
+        ${this.escapeHtml(suggestion)}
+      </div>`
+    ).join('');
+    
+    autocompleteList.style.display = 'block';
+    
+    // クリックイベント
+    autocompleteList.querySelectorAll('.autocomplete-item').forEach(item => {
+      item.addEventListener('click', () => {
+        this.selectSuggestion(parseInt(item.dataset.index));
+      });
+    });
+  }
+
+  hide() {
+    const autocompleteList = document.querySelector('.autocomplete-list');
+    if (autocompleteList) {
+      autocompleteList.style.display = 'none';
+    }
+    this.selectedIndex = -1;
+  }
+
+  updateSelection() {
+    const items = document.querySelectorAll('.autocomplete-item');
+    items.forEach((item, index) => {
+      if (index === this.selectedIndex) {
+        item.classList.add('selected');
+      } else {
+        item.classList.remove('selected');
+      }
+    });
+  }
+
+  selectSuggestion(index) {
+    const suggestion = this.currentSuggestions[index];
+    if (!suggestion) return;
+    
+    const input = document.getElementById('memberInput');
+    const lines = input.value.split('\n');
+    lines[lines.length - 1] = suggestion;
+    input.value = lines.join('\n');
+    
+    this.hide();
+    input.focus();
+  }
+
+  escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 }
 
-// グローバルスコープに関数を設定
-window.applyGroup = applyGroup;
-window.deleteGroup = deleteGroup;
+// アプリケーションの初期化
+document.addEventListener('DOMContentLoaded', async () => {
+  const app = new CalendarGroupApp();
+  await app.initialize();
+});
+
+// グローバル関数（後方互換性のため）
+function showMessage(text, type = 'info', duration = 3000, actions = null) {
+  const messageElement = document.getElementById('message');
+  clearTimeout(messageElement._hideTimer);
+  messageElement.innerHTML = '';
+  
+  const textSpan = document.createElement('span');
+  textSpan.textContent = text;
+  textSpan.className = 'message-text';
+  messageElement.appendChild(textSpan);
+  
+  if (actions && Array.isArray(actions)) {
+    const actionsContainer = document.createElement('div');
+    actionsContainer.className = 'message-actions';
+    
+    actions.forEach(action => {
+      const button = document.createElement('button');
+      button.textContent = action.text;
+      button.className = `message-action-btn ${action.type || 'secondary'}`;
+      button.onclick = () => {
+        if (typeof action.handler === 'function') {
+          action.handler();
+        }
+        hideMessage();
+      };
+      actionsContainer.appendChild(button);
+    });
+    
+    messageElement.appendChild(actionsContainer);
+  }
+  
+  const iconMap = {
+    success: '✅',
+    error: '❌',
+    warning: '⚠️',
+    info: 'ℹ️'
+  };
+  
+  if (iconMap[type]) {
+    textSpan.textContent = `${iconMap[type]} ${text}`;
+  }
+  
+  messageElement.className = `message ${type}`;
+  
+  if (duration > 0) {
+    messageElement._hideTimer = setTimeout(() => {
+      hideMessage();
+    }, duration);
+  }
+}
+
+function hideMessage() {
+  const messageElement = document.getElementById('message');
+  messageElement.className = 'message';
+  messageElement.innerHTML = '';
+  clearTimeout(messageElement._hideTimer);
+}
+
+function showErrorMessage(error, showRetryAction = false) {
+  let message = 'エラーが発生しました';
+  let actions = [];
+  
+  if (error instanceof CalendarGroupError) {
+    message = error.toUserMessage();
+  } else if (error && error.message) {
+    message = error.message;
+  }
+  
+  if (showRetryAction) {
+    actions.push({
+      text: 'リトライ',
+      type: 'primary',
+      handler: () => {
+        window.location.reload();
+      }
+    });
+  }
+  
+  if (localStorage.getItem('debug_mode') === 'true') {
+    actions.push({
+      text: '詳細',
+      type: 'secondary',
+      handler: () => {
+        console.error('Error details:', error);
+        if (error instanceof CalendarGroupError) {
+          console.error('Debug info:', error.toDebugInfo());
+        }
+      }
+    });
+  }
+  
+  showMessage(message, 'error', 5000, actions.length > 0 ? actions : null);
+}
+
+function showSuccessMessage(message, autoClose = true) {
+  showMessage(message, 'success', autoClose ? 2000 : 0);
+}
+
+function showWarningMessage(message, actions = null) {
+  showMessage(message, 'warning', 4000, actions);
+}
