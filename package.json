@@ -29,7 +29,7 @@
     "@playwright/test": "^1.40.0",
     "@types/chrome": "^0.0.251",
     "@types/jest": "^29.5.10",
-    "eslint": "^8.54.0",
+    "eslint": "^9.31.0",
     "eslint-config-prettier": "^9.0.0",
     "eslint-plugin-jest": "^27.6.0",
     "http-server": "^14.1.1",
