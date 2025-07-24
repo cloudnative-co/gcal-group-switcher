@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2025-07-24
+
+### Added
+- エラーログ収集システム
+  - 全スクリプト（background.js、popup.js、content.js）での自動エラー収集
+  - エラーログをchrome.storage.localに最大100件まで保存
+  - エラーログをクリップボードにコピーする機能
+  - エラーが無い場合は「エラーログはありません」と表示
+
+### Changed
+- デバッグ機能のUI改善
+  - デバッグ情報とエラーログの表示エリアを削除し、クリップボードコピーのみに変更
+  - 「デバッグ」セクションとして独立させて整理
+
+### Fixed
+- infoタイプのメッセージが表示されない問題を修正
+
 ## [1.1.0] - 2025-07-24
 
 ### Added

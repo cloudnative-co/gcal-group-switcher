@@ -356,13 +356,21 @@ h3 {
   display: block;
 }
 
+.message.info {
+  background-color: #e8f0fe;
+  color: #1a73e8;
+  border: 1px solid #4285f4;
+  display: block;
+}
+
 .backup-section {
   margin-top: 16px;
   padding-top: 16px;
   border-top: 1px solid #e0e0e0;
 }
 
-.backup-section h3 {
+.backup-section h3,
+.debug-section h3 {
   font-size: 14px;
   font-weight: 600;
   color: #3c4043;
@@ -381,6 +389,7 @@ h3 {
   white-space: pre-wrap;
   font-family: monospace;
 }
+
 
 ::-webkit-scrollbar {
   width: 8px;

@@ -1,18 +1,79 @@
 // Googleカレンダーのカレンダーリストを取得・操作するスクリプト
 
+// エラーログ管理
+const ErrorLogger = {
+  // エラーログの最大保存数
+  MAX_ERROR_LOGS: 100,
+  
+  // エラーをストレージに保存
+  async saveError(error, context = 'content') {
+    try {
+      const errorLog = {
+        timestamp: new Date().toISOString(),
+        context: context,
+        message: error.message || String(error),
+        stack: error.stack || '',
+        url: window.location.href,
+        userAgent: navigator.userAgent
+      };
+      
+      // 既存のログを取得
+      const result = await chrome.storage.local.get(['errorLogs']);
+      const errorLogs = result.errorLogs || [];
+      
+      // 新しいエラーを追加
+      errorLogs.unshift(errorLog);
+      
+      // 最大保存数を超えたら古いものを削除
+      if (errorLogs.length > this.MAX_ERROR_LOGS) {
+        errorLogs.splice(this.MAX_ERROR_LOGS);
+      }
+      
+      // 保存
+      await chrome.storage.local.set({ errorLogs });
+      console.error('Error logged:', errorLog);
+    } catch (saveError) {
+      console.error('Failed to save error log:', saveError);
+    }
+  }
+};
+
+// グローバルエラーハンドラー
+window.addEventListener('error', (event) => {
+  ErrorLogger.saveError({
+    message: event.message,
+    stack: `${event.filename}:${event.lineno}:${event.colno}`,
+    error: event.error
+  });
+});
+
+// Promise rejection ハンドラー
+window.addEventListener('unhandledrejection', (event) => {
+  ErrorLogger.saveError({
+    message: `Unhandled Promise Rejection: ${event.reason}`,
+    stack: event.reason?.stack || ''
+  });
+});
+
 // メッセージリスナーの設定
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log('Received message:', request);
   
-  if (request.action === 'getCalendars') {
-    const calendars = getCalendarList();
-    sendResponse({ calendars });
-  } else if (request.action === 'applyGroup') {
-    applyGroupToCalendars(request.members);
-    sendResponse({ success: true });
-  } else if (request.action === 'showMyCalendarOnly') {
-    showOnlyMyCalendar();
-    sendResponse({ success: true });
+  try {
+    if (request.action === 'getCalendars') {
+      const calendars = getCalendarList();
+      sendResponse({ calendars });
+    } else if (request.action === 'applyGroup') {
+      applyGroupToCalendars(request.members);
+      sendResponse({ success: true });
+    } else if (request.action === 'showMyCalendarOnly') {
+      showOnlyMyCalendar();
+      sendResponse({ success: true });
+    }
+  } catch (error) {
+    console.error('Error in message handler:', error);
+    ErrorLogger.saveError(error, `content-message-${request.action}`);
+    sendResponse({ error: error.message });
   }
   return true;
 });

@@ -5,6 +5,61 @@ let lastDebugInfo = '';
 let editingGroupIndex = null;
 let expandedGroups = new Set();
 
+// エラーログ管理
+const ErrorLogger = {
+  // エラーログの最大保存数
+  MAX_ERROR_LOGS: 100,
+  
+  // エラーをストレージに保存
+  async saveError(error, context = 'popup') {
+    try {
+      const errorLog = {
+        timestamp: new Date().toISOString(),
+        context: context,
+        message: error.message || String(error),
+        stack: error.stack || '',
+        url: window.location.href,
+        userAgent: navigator.userAgent
+      };
+      
+      // 既存のログを取得
+      const result = await chrome.storage.local.get(['errorLogs']);
+      const errorLogs = result.errorLogs || [];
+      
+      // 新しいエラーを追加
+      errorLogs.unshift(errorLog);
+      
+      // 最大保存数を超えたら古いものを削除
+      if (errorLogs.length > this.MAX_ERROR_LOGS) {
+        errorLogs.splice(this.MAX_ERROR_LOGS);
+      }
+      
+      // 保存
+      await chrome.storage.local.set({ errorLogs });
+      console.error('Error logged:', errorLog);
+    } catch (saveError) {
+      console.error('Failed to save error log:', saveError);
+    }
+  }
+};
+
+// グローバルエラーハンドラー
+window.addEventListener('error', (event) => {
+  ErrorLogger.saveError({
+    message: event.message,
+    stack: `${event.filename}:${event.lineno}:${event.colno}`,
+    error: event.error
+  });
+});
+
+// Promise rejection ハンドラー
+window.addEventListener('unhandledrejection', (event) => {
+  ErrorLogger.saveError({
+    message: `Unhandled Promise Rejection: ${event.reason}`,
+    stack: event.reason?.stack || ''
+  });
+});
+
 // 初期化
 document.addEventListener('DOMContentLoaded', async () => {
   try {
@@ -14,6 +69,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupEventListeners();
   } catch (error) {
     console.error('初期化エラー:', error);
+    ErrorLogger.saveError(error, 'popup-init');
     showMessage('初期化に失敗しました。ページをリロードしてください。', 'error');
   }
 });
@@ -24,8 +80,8 @@ function setupEventListeners() {
   document.getElementById('cancelEdit').addEventListener('click', cancelEdit);
   document.getElementById('memberInput').addEventListener('input', handleMemberInput);
   document.getElementById('memberInput').addEventListener('keydown', handleKeyDown);
-  document.getElementById('showDebugInfo').addEventListener('click', showDebugInfo);
   document.getElementById('copyDebugInfo').addEventListener('click', copyDebugInfo);
+  document.getElementById('copyErrorLogs').addEventListener('click', copyErrorLogs);
   document.getElementById('showMyCalendarOnly').addEventListener('click', showMyCalendarOnly);
   
   // バックアップ・復元機能
@@ -491,19 +547,13 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-// デバッグ情報を表示
-async function showDebugInfo() {
-  const debugDiv = document.getElementById('debugInfo');
-  const copyButton = document.getElementById('copyDebugInfo');
-  debugDiv.style.display = 'block';
-  debugDiv.innerHTML = 'デバッグ情報を取得中...';
-  
+// デバッグ情報を取得
+async function getDebugInfo() {
   try {
     const tabs = await chrome.tabs.query({active: true, currentWindow: true});
     
     if (!tabs[0].url.includes('calendar.google.com')) {
-      debugDiv.innerHTML = 'エラー: Googleカレンダーのページではありません';
-      return;
+      return 'エラー: Googleカレンダーのページではありません';
     }
     
     // カレンダーリストを取得
@@ -564,40 +614,39 @@ ${i + 1}. aria-label: "${s.ariaLabel}"
 そのまま使用してください。
 例: "Shintaro Okamura"`;
     
-    debugDiv.innerHTML = debugInfo;
-    lastDebugInfo = debugInfo;
-    copyButton.style.display = 'block';
+    return debugInfo;
     
   } catch (error) {
-    const errorInfo = `エラー: ${error.message}\n\nGoogleカレンダーのページをリロードしてから再度お試しください。`;
-    debugDiv.innerHTML = errorInfo;
-    lastDebugInfo = errorInfo;
-    copyButton.style.display = 'block';
+    return `エラー: ${error.message}\n\nGoogleカレンダーのページをリロードしてから再度お試しください。`;
   }
 }
 
 // デバッグ情報をクリップボードにコピー
 async function copyDebugInfo() {
   try {
-    await navigator.clipboard.writeText(lastDebugInfo);
+    showMessage('デバッグ情報を取得中...', 'info');
+    const debugInfo = await getDebugInfo();
+    
+    await navigator.clipboard.writeText(debugInfo);
     showMessage('デバッグ情報をコピーしました', 'success');
   } catch (error) {
     // フォールバック: テキストエリアを使用
-    const textarea = document.createElement('textarea');
-    textarea.value = lastDebugInfo;
-    textarea.style.position = 'fixed';
-    textarea.style.opacity = '0';
-    document.body.appendChild(textarea);
-    textarea.select();
-    
     try {
+      const debugInfo = await getDebugInfo();
+      const textarea = document.createElement('textarea');
+      textarea.value = debugInfo;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      
       document.execCommand('copy');
+      document.body.removeChild(textarea);
       showMessage('デバッグ情報をコピーしました', 'success');
     } catch (e) {
       showMessage('コピーに失敗しました', 'error');
+      ErrorLogger.saveError(e, 'popup-copy-debug');
     }
-    
-    document.body.removeChild(textarea);
   }
 }
 
@@ -668,6 +717,98 @@ async function importSettings(event) {
     showMessage('インポートに失敗しました: ' + error.message, 'error');
     event.target.value = ''; // ファイル選択をリセット
   }
+}
+
+// エラーログをクリップボードにコピー
+async function copyErrorLogs() {
+  console.log('copyErrorLogs called');
+  try {
+    showMessage('エラーログを取得中...', 'info');
+    
+    const result = await chrome.storage.local.get(['errorLogs']);
+    console.log('Storage result:', result);
+    const errorLogs = result.errorLogs || [];
+    console.log('Error logs count:', errorLogs.length);
+    
+    let logText = '=== エラーログ ===\n\n';
+    
+    if (errorLogs.length === 0) {
+      logText += 'エラーログはありません';
+      console.log('No error logs found, showing message');
+      showMessage('エラーログはありません', 'info');
+      return;
+    } else {
+      logText += `合計 ${errorLogs.length} 件のエラー\n\n`;
+      
+      errorLogs.forEach((log, index) => {
+        const date = new Date(log.timestamp);
+        const timeStr = date.toLocaleString('ja-JP');
+        
+        logText += `--- エラー ${index + 1} ---\n`;
+        logText += `時刻: ${timeStr}\n`;
+        logText += `コンテキスト: ${log.context}\n`;
+        logText += `メッセージ: ${log.message}\n`;
+        if (log.stack) {
+          logText += `スタック: ${log.stack}\n`;
+        }
+        if (log.url) {
+          logText += `URL: ${log.url}\n`;
+        }
+        logText += '\n';
+      });
+    }
+    
+    await navigator.clipboard.writeText(logText);
+    showMessage('エラーログをコピーしました', 'success');
+  } catch (error) {
+    console.error('Clipboard API failed:', error);
+    // フォールバック: テキストエリアを使用
+    try {
+      const result = await chrome.storage.local.get(['errorLogs']);
+      const errorLogs = result.errorLogs || [];
+      let logText = '=== エラーログ ===\n\n';
+      
+      if (errorLogs.length === 0) {
+        logText += 'エラーログはありません';
+        showMessage('エラーログはありません', 'info');
+        return;
+      } else {
+        logText += `合計 ${errorLogs.length} 件のエラー\n\n`;
+        errorLogs.forEach((log, index) => {
+          const date = new Date(log.timestamp);
+          const timeStr = date.toLocaleString('ja-JP');
+          logText += `--- エラー ${index + 1} ---\n`;
+          logText += `時刻: ${timeStr}\n`;
+          logText += `コンテキスト: ${log.context}\n`;
+          logText += `メッセージ: ${log.message}\n`;
+          if (log.stack) logText += `スタック: ${log.stack}\n`;
+          if (log.url) logText += `URL: ${log.url}\n`;
+          logText += '\n';
+        });
+      }
+      
+      const textarea = document.createElement('textarea');
+      textarea.value = logText;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      showMessage('エラーログをコピーしました', 'success');
+    } catch (e) {
+      showMessage('コピーに失敗しました', 'error');
+      ErrorLogger.saveError(e, 'popup-copy-error-logs');
+    }
+  }
+}
+
+// HTMLエスケープ
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
 }
 
 // グローバルスコープに関数を設定
