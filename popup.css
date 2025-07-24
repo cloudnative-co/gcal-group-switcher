@@ -356,6 +356,19 @@ h3 {
   display: block;
 }
 
+.backup-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.backup-section h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #3c4043;
+  margin-bottom: 12px;
+}
+
 .debug-info {
   background: #f0f0f0;
   border: 1px solid #ddd;

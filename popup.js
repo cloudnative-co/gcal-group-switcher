@@ -28,6 +28,13 @@ function setupEventListeners() {
   document.getElementById('copyDebugInfo').addEventListener('click', copyDebugInfo);
   document.getElementById('showMyCalendarOnly').addEventListener('click', showMyCalendarOnly);
   
+  // バックアップ・復元機能
+  document.getElementById('exportSettings').addEventListener('click', exportSettings);
+  document.getElementById('importSettingsBtn').addEventListener('click', () => {
+    document.getElementById('importSettings').click();
+  });
+  document.getElementById('importSettings').addEventListener('change', importSettings);
+  
   // クリックでオートコンプリートを閉じる
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.member-input-container')) {
@@ -591,6 +598,75 @@ async function copyDebugInfo() {
     }
     
     document.body.removeChild(textarea);
+  }
+}
+
+// 設定のエクスポート
+async function exportSettings() {
+  try {
+    const result = await chrome.storage.local.get(['calendarGroups']);
+    const groups = result.calendarGroups || [];
+    
+    const exportData = {
+      version: '1.0',
+      exportDate: new Date().toISOString(),
+      groups: groups
+    };
+    
+    const dataStr = JSON.stringify(exportData, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(dataBlob);
+    a.download = `gcal-groups-backup-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    
+    showMessage('設定をエクスポートしました', 'success');
+  } catch (error) {
+    console.error('エクスポートエラー:', error);
+    showMessage('エクスポートに失敗しました', 'error');
+  }
+}
+
+// 設定のインポート
+async function importSettings(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  try {
+    const text = await file.text();
+    const importData = JSON.parse(text);
+    
+    // データの検証
+    if (!importData.version || !importData.groups || !Array.isArray(importData.groups)) {
+      throw new Error('無効なバックアップファイルです');
+    }
+    
+    // 確認ダイアログ
+    const groupCount = importData.groups.length;
+    const confirmMessage = `${groupCount}個のグループをインポートします。\n現在の設定は上書きされます。続行しますか？`;
+    
+    if (!confirm(confirmMessage)) {
+      event.target.value = ''; // ファイル選択をリセット
+      return;
+    }
+    
+    // グループをインポート
+    await chrome.storage.local.set({ calendarGroups: importData.groups });
+    groups = importData.groups;
+    
+    // UIを更新
+    renderGroupList();
+    showMessage(`${groupCount}個のグループをインポートしました`, 'success');
+    
+    // ファイル選択をリセット
+    event.target.value = '';
+  } catch (error) {
+    console.error('インポートエラー:', error);
+    showMessage('インポートに失敗しました: ' + error.message, 'error');
+    event.target.value = ''; // ファイル選択をリセット
   }
 }
 

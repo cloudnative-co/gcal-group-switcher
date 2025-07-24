@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2025-07-24
+
+### Added
+- グループ設定のバックアップ・復元機能
+  - 設定をJSONファイルとしてエクスポート
+  - JSONファイルから設定をインポート
+  - 拡張機能の再インストール時に設定を保持可能
+
 ## [1.0.0] - 2025-07-24
 
 ### Added

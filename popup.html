@@ -50,6 +50,15 @@
 
     <div class="message" id="message"></div>
     
+    <div class="backup-section">
+      <h3>設定のバックアップ・復元</h3>
+      <div class="button-group">
+        <button id="exportSettings" class="btn btn-secondary">設定をエクスポート</button>
+        <button id="importSettingsBtn" class="btn btn-secondary">設定をインポート</button>
+        <input type="file" id="importSettings" accept=".json" style="display: none;">
+      </div>
+    </div>
+    
     <div class="debug-section">
       <button id="showDebugInfo" class="btn btn-secondary" style="width: 100%; margin-top: 12px;">デバッグ情報を表示</button>
       <div id="debugInfo" class="debug-info" style="display: none;"></div>
