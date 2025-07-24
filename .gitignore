@@ -1,0 +1,80 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.directory
+
+# IDE and Editors
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.vs/
+*.code-workspace
+
+# Node.js (将来的に使用する場合)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# Chrome Extension specific
+*.pem
+*.crx
+*.zip
+
+# Build directories
+build/
+dist/
+out/
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+*.cache
+
+# Private keys and credentials
+secrets/
+*.key
+*.env
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Documentation build
+docs/_build/
+docs/.doctrees/
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Archive files (パッケージ化されたもの)
+archive/
+releases/
+
+# Custom icon sources (デザインファイルなど)
+*.psd
+*.ai
+*.sketch
+*.fig
+
+# Development notes
+TODO.md
+NOTES.md
+scratch/

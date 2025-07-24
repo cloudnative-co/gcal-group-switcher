@@ -1,0 +1,12 @@
+/* カレンダーグループマネージャーのスタイル */
+
+/* 選択されたカレンダーをハイライト（オプション） */
+.calendar-group-selected {
+  background-color: rgba(26, 115, 232, 0.1) !important;
+  border-left: 3px solid #1a73e8 !important;
+}
+
+/* アニメーション効果 */
+.calendar-group-transition {
+  transition: background-color 0.3s ease;
+}
